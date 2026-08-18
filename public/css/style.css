@@ -83,22 +83,12 @@ body {
   mix-blend-mode: screen;
 }
 
-/* Light thrown onto the landscape by a burst. Sits above the artwork so
- * the scene reads as lit, rather than the fireworks floating on a decal. */
-#ground-glow {
-  position: absolute;
-  inset: 0;
-  z-index: 11;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.42s ease-out;
-  mix-blend-mode: screen;
-  background: radial-gradient(
-    120% 55% at 50% 100%,
-    color-mix(in srgb, var(--glow, #ffd166) 70%, transparent) 0%,
-    transparent 70%
-  );
-}
+/* NOTE: a #ground-glow layer used to live here — a full-stage div with a
+ * radial-gradient background and `mix-blend-mode: screen`, meant to light
+ * the grass on each burst. Its rectangular element box became visible
+ * once composited. The light spill is now drawn on the fireworks canvas
+ * (see _stepGroundLight in js/fx.js), where the sprite's alpha falloff
+ * bounds it and there is no box edge to show. */
 
 /* NOTE: a #foreground-scrim used to live here — a dark gradient over the
  * bottom third, meant to sink stray sparks into the grass. It was removed:
@@ -659,10 +649,6 @@ body.is-pixel #fireworks-canvas {
 
   .nudge {
     animation: none;
-  }
-
-  #ground-glow {
-    display: none;
   }
 }
 

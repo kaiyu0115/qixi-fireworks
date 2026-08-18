@@ -225,6 +225,12 @@ export class FireworksEngine {
     this.flashes = [];
     this.streaks = [];
     this.smoke = [];
+    // Light a burst throws down onto the landscape. Previously a DOM layer
+    // with a radial-gradient background, which showed its rectangular box
+    // edge once `mix-blend-mode: screen` composited it. Done on the canvas
+    // it is bounded by the sprite's own alpha falloff, so there is no box
+    // to see — and it can be captured and checked like everything else.
+    this.groundLight = { intensity: 0, color: 2 };
 
     // Fixed pool — never grows, never triggers GC churn mid-show.
     // `free` is a stack of dead slot indices so allocation stays O(1);
@@ -422,6 +428,8 @@ export class FireworksEngine {
 
     if (!this.reducedMotion) {
       this.flashes.push({ x, y, color, life: 0.42, maxLife: 0.42, power });
+      this.groundLight.color = color;
+      this.groundLight.intensity = Math.min(1.2, this.groundLight.intensity + 0.6 * power);
 
       // Smoke is an anime-style flourish only. Soft grey haze in a pixel
       // scene fights the hard-edged art rather than supporting it.
@@ -501,7 +509,8 @@ export class FireworksEngine {
     // battery is protected by pausing outright when the tab is hidden.
     const busy =
       this.liveCount > 0 || this.rockets.length > 0 || this.flashes.length > 0 ||
-      this.streaks.length > 0 || this.smoke.length > 0 || this.fireflies.length > 0;
+      this.streaks.length > 0 || this.smoke.length > 0 || this.fireflies.length > 0 ||
+      this.groundLight.intensity > 0;
 
     if (!busy) {
       // Nothing to draw. Let the canvas settle, then stop burning frames
@@ -525,6 +534,7 @@ export class FireworksEngine {
 
     ctx.globalCompositeOperation = 'lighter';
 
+    this._stepGroundLight(dt);
     this._stepFireflies(dt);
     this._stepFlashes(dt);
     this._stepRockets(dt, tuning);
@@ -573,6 +583,31 @@ export class FireworksEngine {
     ctx.globalAlpha = 1;
     ctx.fillStyle = 'rgba(0,0,0,' + alpha.toFixed(4) + ')';
     ctx.fillRect(0, 0, this.w, this.h);
+  }
+
+  /**
+   * Warm wash across the lower scene, as if the burst briefly lit the
+   * grass. Drawn from the same soft sprite as the flash: its alpha reaches
+   * zero well inside the drawn rect, so the glow has no visible border.
+   */
+  _stepGroundLight(dt) {
+    const gl = this.groundLight;
+    if (gl.intensity <= 0.004) {
+      gl.intensity = 0;
+      return;
+    }
+    gl.intensity *= Math.exp(-2.4 * dt);
+
+    const ctx = this.ctx;
+    ctx.globalCompositeOperation = 'lighter';
+    const w = this.w * 1.7;
+    const h = this.h * 0.9;
+    ctx.globalAlpha = gl.intensity * (this.style === 'pixel' ? 0.09 : 0.15);
+    ctx.drawImage(
+      this.flashSprites[this.style][gl.color],
+      (this.w - w) / 2, this.h - h * 0.52, w, h
+    );
+    ctx.globalAlpha = 1;
   }
 
   _stepFireflies(dt) {

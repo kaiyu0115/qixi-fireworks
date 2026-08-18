@@ -20,7 +20,6 @@ const el = {
   toasts: $('#toast-container'),
   names: $('#names-container'),
   bubbles: $('#bubbles-container'),
-  glow: $('#ground-glow'),
   chat: $('#chat-container'),
   chatInput: $('#chat-input'),
   styleBtn: $('#toggle-style-btn'),
@@ -40,10 +39,8 @@ const bubbles = new Bubbles(el.bubbles, stage);
 const engine = new FireworksEngine(el.canvas, {
   reducedMotion,
   bloomCanvas: el.bloom,
-  onBurst: (nx, ny, hex, power) => {
-    sfx.burst(power);
-    pulseGround(hex, power);
-  },
+  // The light spill onto the landscape is drawn by the engine itself now.
+  onBurst: (nx, ny, hex, power) => sfx.burst(power),
 });
 
 /* ------------------------------------------------------------------ *
@@ -163,20 +160,6 @@ if (!reducedMotion) {
     bubbles.position();
   };
   requestAnimationFrame(drift);
-}
-
-/* ------------------------------------------------------------------ *
- * Ground light spill. Cheap DOM layer rather than more canvas work —
- * it sits above the artwork so the landscape appears lit by the burst.
- * ------------------------------------------------------------------ */
-let glowTimer = 0;
-
-function pulseGround(hex, power) {
-  if (reducedMotion) return;
-  el.glow.style.setProperty('--glow', hex);
-  el.glow.style.opacity = String(Math.min(0.5, 0.26 * power));
-  clearTimeout(glowTimer);
-  glowTimer = setTimeout(() => { el.glow.style.opacity = '0'; }, 130);
 }
 
 /* ------------------------------------------------------------------ *
