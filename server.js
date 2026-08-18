@@ -9,60 +9,95 @@ const io = new Server(server);
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-let connectedUsers = 0;
-// Track users to assign positions (0: left character, 1: right character, etc)
-const users = {};
+// roomCode -> { users: { socketId: { nickname, role, index } }, currentStyle }
+const rooms = {};
 const colors = ['#ff7bac', '#ff4d85', '#a2d2ff', '#ffd166', '#06d6a0', '#ffffff'];
 
 io.on('connection', (socket) => {
-  connectedUsers++;
-  console.log(`User connected. Total: ${connectedUsers}`);
-
-  socket.on('user_join', (nickname) => {
-    const existingIndices = Object.values(users).map(u => u.index);
-    let assignedIndex = 0;
-    while (existingIndices.includes(assignedIndex)) {
-        assignedIndex++;
-    }
-
-    users[socket.id] = { id: socket.id, nickname, index: assignedIndex };
-    
-    // Send all existing users to the new user
-    socket.emit('init_users', Object.values(users));
-    
-    // Broadcast the new user to others
-    socket.broadcast.emit('user_joined', users[socket.id]);
+  socket.on('join_room', (data, callback) => {
+      const { roomCode, nickname, role, style } = data;
+      
+      if (!rooms[roomCode]) {
+          rooms[roomCode] = { users: {}, currentStyle: style };
+      }
+      
+      const room = rooms[roomCode];
+      const existingUsersCount = Object.keys(room.users).length;
+      
+      if (existingUsersCount >= 2) {
+          return callback({ success: false, message: '此房間已滿 (最多兩人)！' });
+      }
+      
+      // Prevent role collision
+      const rolesTaken = Object.values(room.users).map(u => u.role);
+      let assignedRole = role;
+      if (rolesTaken.includes(role)) {
+          assignedRole = role === 'hamster' ? 'capybara' : 'hamster';
+      }
+      
+      // Index mapping: Hamster = 0, Capybara = 1 (to align with the frontend position logic)
+      const index = assignedRole === 'hamster' ? 0 : 1;
+      
+      room.users[socket.id] = { id: socket.id, nickname, role: assignedRole, index };
+      socket.join(roomCode);
+      socket.roomCode = roomCode;
+      
+      // Pass back initial state
+      callback({ 
+          success: true, 
+          users: Object.values(room.users), 
+          style: room.currentStyle, 
+          assignedRole 
+      });
+      
+      socket.to(roomCode).emit('user_joined', room.users[socket.id]);
   });
 
   socket.on('firework_click', (data) => {
-    socket.broadcast.emit('firework_trigger', data);
+    if (socket.roomCode) {
+        socket.to(socket.roomCode).emit('firework_trigger', data);
+    }
   });
   
   socket.on('style_change', (style) => {
-      socket.broadcast.emit('style_change', style);
+      if (socket.roomCode && rooms[socket.roomCode]) {
+          rooms[socket.roomCode].currentStyle = style;
+          socket.to(socket.roomCode).emit('style_change', style);
+      }
+  });
+  
+  socket.on('chat_msg', (msg) => {
+      if (socket.roomCode) {
+          io.to(socket.roomCode).emit('chat_msg', { userId: socket.id, msg });
+      }
   });
 
   socket.on('disconnect', () => {
-    connectedUsers--;
-    console.log(`User disconnected. Total: ${connectedUsers}`);
-    if (users[socket.id]) {
-        const leftUser = users[socket.id];
-        delete users[socket.id];
-        io.emit('user_left', leftUser.id);
+    if (socket.roomCode && rooms[socket.roomCode]) {
+        const room = rooms[socket.roomCode];
+        delete room.users[socket.id];
+        io.to(socket.roomCode).emit('user_left', socket.id);
+        
+        // Clean up empty rooms
+        if (Object.keys(room.users).length === 0) {
+            delete rooms[socket.roomCode];
+        }
     }
   });
 });
 
 // Auto fireworks loop
 setInterval(() => {
-    if (Object.keys(users).length > 0) {
-        io.emit('auto_firework', {
-            x: Math.random() * 0.8 + 0.1, // 0.1 to 0.9 width
-            y: Math.random() * 0.4 + 0.1, // upper area 0.1 to 0.5 height
-            color: colors[Math.floor(Math.random() * colors.length)],
-            isAuto: true
-        });
-    }
+    Object.keys(rooms).forEach(roomCode => {
+        if (Object.keys(rooms[roomCode].users).length > 0) {
+            io.to(roomCode).emit('auto_firework', {
+                x: Math.random() * 0.8 + 0.1,
+                y: Math.random() * 0.4 + 0.1,
+                color: colors[Math.floor(Math.random() * colors.length)],
+                isAuto: true
+            });
+        }
+    });
 }, 2500);
 
 const PORT = process.env.PORT || 3000;
