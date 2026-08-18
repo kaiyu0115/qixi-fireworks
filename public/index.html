@@ -1,60 +1,90 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>七夕專屬：線上煙火大會</title>
-    <link rel="stylesheet" href="style.css?v=3">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#05060f">
+  <meta name="description" content="與心愛的人一起在線上看煙火。">
+  <title>七夕專屬：線上煙火大會</title>
+  <!-- Preload only the variant this viewport will actually use. The 1/1
+       threshold matches pickVariant() in js/scene.js; without `media` a
+       phone downloads the 817KB landscape art it never shows. -->
+  <link rel="preload" as="image" href="assets/anime_16x9.jpg" media="(min-aspect-ratio: 1/1)">
+  <link rel="preload" as="image" href="assets/anime_9x16.jpg" media="(max-aspect-ratio: 1/1)">
+  <link rel="stylesheet" href="css/style.css?v=__BUILD__">
 </head>
 <body>
-    <div id="login-overlay">
-        <div class="login-box">
-            <h1>✨ 星空煙火大會 ✨</h1>
-            <p>與心愛的人進入專屬夜空</p>
-            <input type="text" id="room-input" placeholder="設定專屬房間密碼 (如 0819)" autocomplete="off">
-            <input type="text" id="nickname-input" placeholder="輸入你的專屬暱稱..." autocomplete="off">
-            
-            <div class="role-selector" style="margin-bottom: 20px; text-align: left;">
-                <p style="margin-bottom: 10px; font-size: 13px;">我想當：</p>
-                <div class="style-buttons role-buttons">
-                    <button class="role-btn active" data-role="hamster">倉鼠 🐹</button>
-                    <button class="role-btn" data-role="capybara">卡皮巴拉 🦦</button>
-                </div>
-            </div>
+  <div id="stage">
+    <div id="bg-root"></div>
+    <canvas id="fireworks-canvas"></canvas>
+    <canvas id="bloom-canvas" aria-hidden="true"></canvas>
+    <div id="ground-glow"></div>
 
-            <div class="style-selector">
-                <p>初始夜空風格：</p>
-                <div class="style-buttons">
-                    <button class="style-btn active" data-style="anime">動畫浪漫風</button>
-                    <button class="style-btn" data-style="pixel">可愛像素風</button>
-                </div>
-            </div>
-            
-            <button id="join-btn">進入星空</button>
-        </div>
+    <div id="ui-layer">
+      <button id="room-tag" type="button" hidden></button>
+
+      <div class="controls">
+        <button id="toggle-style-btn" class="ghost-btn" type="button">切換為可愛像素風</button>
+        <button id="heart-btn" class="ghost-btn icon-btn" type="button" aria-label="放一朵愛心煙火">💗</button>
+        <button id="toggle-sound-btn" class="ghost-btn icon-btn" type="button" aria-label="開啟音效">🔇</button>
+      </div>
+
+      <div id="toast-container" role="status" aria-live="polite"></div>
+      <div id="names-container"></div>
+      <div id="bubbles-container"></div>
+
+      <div id="chat-container" hidden>
+        <input type="text" id="chat-input" maxlength="80" placeholder="說點浪漫的話…"
+               autocomplete="off" aria-label="傳訊息給另一半">
+      </div>
     </div>
+  </div>
 
-    <div id="main-container">
-        <picture id="bg-picture">
-            <source media="(orientation: portrait)" srcset="assets/anime_9x16.jpg" id="bg-source-portrait">
-            <img src="assets/anime_16x9.jpg" id="bg-img-landscape" alt="background">
-        </picture>
-        
-        <canvas id="fireworks-canvas"></canvas>
-        <div id="ui-layer">
-            <div class="controls">
-                <button id="toggle-style-btn">切換風格</button>
-            </div>
-            <div id="toast-container"></div>
-            <div id="names-container"></div>
-            
-            <div id="chat-container" style="display: none;">
-                <input type="text" id="chat-input" placeholder="說點浪漫的話..." autocomplete="off">
-            </div>
+  <div id="login-overlay">
+    <div class="login-box">
+      <h1>✨ 星空煙火大會 ✨</h1>
+      <p class="sub">與心愛的人進入專屬夜空</p>
+
+      <div class="field">
+        <label for="room-input">專屬房間密碼</label>
+        <div class="input-row">
+          <input type="text" id="room-input" maxlength="24" placeholder="例如 0819"
+                 autocomplete="off" enterkeyhint="next">
+          <button id="dice-btn" class="dice-btn" type="button"
+                  aria-label="產生一個不會撞房的專屬房號">🎲</button>
         </div>
-    </div>
+        <p class="hint">太好猜的房號（如生日）可能會和別人撞房，
+          按 🎲 產生專屬房號最安全。</p>
+      </div>
 
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="script.js?v=3"></script>
+      <div class="field">
+        <label for="nickname-input">你的暱稱</label>
+        <input type="text" id="nickname-input" maxlength="16" placeholder="輸入你的專屬暱稱…"
+               autocomplete="off" enterkeyhint="go">
+      </div>
+
+      <div class="choice-group">
+        <span>我想當</span>
+        <div class="choices">
+          <button class="choice active" type="button" data-role="hamster">倉鼠 🐹</button>
+          <button class="choice" type="button" data-role="capybara">卡皮巴拉 🦦</button>
+        </div>
+      </div>
+
+      <div class="choice-group">
+        <span>初始夜空風格</span>
+        <div class="choices">
+          <button class="choice active" type="button" data-style="anime">動畫浪漫風</button>
+          <button class="choice" type="button" data-style="pixel">可愛像素風</button>
+        </div>
+      </div>
+
+      <button id="join-btn" class="primary-btn" type="button">進入星空</button>
+      <p id="login-error" class="error-line" role="alert"></p>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="js/main.js?v=__BUILD__"></script>
 </body>
 </html>

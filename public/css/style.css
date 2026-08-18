@@ -1,0 +1,688 @@
+:root {
+  --rose: #ff5f8d;
+  --blush: #ff9ec7;
+  --gold: #ffd166;
+  --ink: #05060f;
+  --glass: rgba(255, 255, 255, 0.1);
+  --glass-line: rgba(255, 255, 255, 0.22);
+  --ui-font: 'Segoe UI', 'PingFang TC', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+  --pixel-font: 'Courier New', Courier, monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--ink);
+  color: #fff;
+  font-family: var(--ui-font);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+/* ------------------------------------------------------------------ *
+ * Stage. Pinned to the visual viewport with dvh so the mobile URL bar
+ * sliding in and out does not resize the canvas underneath the show.
+ * ------------------------------------------------------------------ */
+#stage {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--ink);
+  touch-action: none;
+}
+
+#bg-root {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+/* Sized and positioned entirely from JS — see scene.js. Using object-fit
+ * here would create a second source of truth that can drift from the
+ * projection maths used to place the name tags. */
+.bg-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  will-change: transform, opacity;
+  transition: opacity 0.55s ease;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+#fireworks-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 10;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+/* Bloom. A downscaled, blurred copy of the firework canvas composited
+ * with `screen`, so only bright pixels contribute — the night sky and the
+ * artwork underneath are left alone. */
+#bloom-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 10;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+/* Light thrown onto the landscape by a burst. Sits above the artwork so
+ * the scene reads as lit, rather than the fireworks floating on a decal. */
+#ground-glow {
+  position: absolute;
+  inset: 0;
+  z-index: 11;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.42s ease-out;
+  mix-blend-mode: screen;
+  background: radial-gradient(
+    120% 55% at 50% 100%,
+    color-mix(in srgb, var(--glow, #ffd166) 70%, transparent) 0%,
+    transparent 70%
+  );
+}
+
+/* NOTE: a #foreground-scrim used to live here — a dark gradient over the
+ * bottom third, meant to sink stray sparks into the grass. It was removed:
+ * the engine already fades particles that fall past the horizon, so the
+ * scrim added nothing but a permanent haze over the artwork. */
+
+#ui-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+
+#debug-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------------ *
+ * Login
+ * ------------------------------------------------------------------ */
+#login-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(3, 4, 12, 0.82);
+  backdrop-filter: blur(6px);
+  transition: opacity 0.5s ease;
+}
+
+#login-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.login-box {
+  width: 100%;
+  max-width: 400px;
+  max-height: 92dvh;
+  overflow-y: auto;
+  padding: 32px 28px;
+  text-align: center;
+  background: var(--glass);
+  border: 1px solid var(--glass-line);
+  border-radius: 20px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+}
+
+.login-box h1 {
+  font-size: 23px;
+  margin-bottom: 8px;
+  color: #ffdeeb;
+  letter-spacing: 0.02em;
+}
+
+.login-box .sub {
+  font-size: 14px;
+  margin-bottom: 24px;
+  color: #b9bdd0;
+}
+
+.field {
+  margin-bottom: 14px;
+  text-align: left;
+}
+
+.field label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: #b9bdd0;
+}
+
+.login-box input[type='text'] {
+  width: 100%;
+  padding: 12px 14px;
+  font-size: 16px; /* >=16px stops iOS Safari zooming the page on focus */
+  font-family: inherit;
+  color: #10121c;
+  background: rgba(255, 255, 255, 0.92);
+  border: 2px solid transparent;
+  border-radius: 10px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.login-box input[type='text']:focus {
+  border-color: var(--rose);
+}
+
+.input-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.input-row input[type='text'] {
+  flex: 1;
+  min-width: 0;
+}
+
+.dice-btn {
+  flex: 0 0 auto;
+  width: 46px;
+  font-size: 18px;
+  line-height: 1;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+  border: 2px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.1s ease;
+}
+
+.dice-btn:hover { background: rgba(255, 255, 255, 0.24); }
+.dice-btn:active { transform: scale(0.94) rotate(-12deg); }
+.dice-btn:focus-visible { outline: 2px solid var(--blush); outline-offset: 2px; }
+
+.hint {
+  margin-top: 7px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #9aa0b8;
+}
+
+.choice-group {
+  margin-bottom: 18px;
+  text-align: left;
+}
+
+.choice-group > span {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #b9bdd0;
+}
+
+.choices {
+  display: flex;
+  gap: 10px;
+}
+
+.choice {
+  flex: 1;
+  padding: 11px 8px;
+  font-size: 14px;
+  font-family: inherit;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  border: 2px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.1s ease;
+}
+
+.choice:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.choice:focus-visible {
+  outline: 2px solid var(--blush);
+  outline-offset: 2px;
+}
+
+.choice:active {
+  transform: scale(0.97);
+}
+
+.choice.active {
+  border-color: var(--rose);
+  background: rgba(255, 95, 141, 0.28);
+}
+
+.primary-btn {
+  width: 100%;
+  margin-top: 6px;
+  padding: 13px;
+  font-size: 16px;
+  font-weight: 700;
+  font-family: inherit;
+  color: #fff;
+  background: linear-gradient(135deg, var(--rose), #ff4d85);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(255, 77, 133, 0.38);
+  transition: transform 0.1s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+
+.primary-btn:hover {
+  filter: brightness(1.08);
+}
+
+.primary-btn:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.primary-btn:disabled {
+  filter: grayscale(0.6);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.primary-btn:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
+.error-line {
+  min-height: 18px;
+  margin-top: 10px;
+  font-size: 13px;
+  color: #ff9ba6;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.error-line.visible {
+  opacity: 1;
+}
+
+.shake {
+  animation: shake 0.32s ease;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-7px); }
+  75% { transform: translateX(7px); }
+}
+
+/* ------------------------------------------------------------------ *
+ * HUD
+ * ------------------------------------------------------------------ */
+.controls {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  right: 16px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  pointer-events: auto;
+}
+
+.ghost-btn {
+  padding: 9px 14px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #fff;
+  background: rgba(6, 8, 20, 0.55);
+  border: 1px solid var(--glass-line);
+  border-radius: 999px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: background 0.18s ease, transform 0.1s ease;
+}
+
+.ghost-btn:hover {
+  background: rgba(20, 24, 46, 0.75);
+}
+
+.ghost-btn:active {
+  transform: scale(0.96);
+}
+
+.ghost-btn:focus-visible {
+  outline: 2px solid var(--blush);
+  outline-offset: 2px;
+}
+
+.icon-btn {
+  width: 38px;
+  padding: 9px 0;
+  font-size: 15px;
+  text-align: center;
+}
+
+/* One-time hint that sound exists, since it starts muted. */
+.nudge {
+  animation: nudge 1.6s ease 3;
+}
+
+@keyframes nudge {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 209, 102, 0); }
+  50% { box-shadow: 0 0 0 7px rgba(255, 209, 102, 0.16); }
+}
+
+#room-tag {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  left: 16px;
+  padding: 7px 13px;
+  font-size: 12px;
+  font-family: inherit;
+  letter-spacing: 0.04em;
+  color: #cfd4e6;
+  background: rgba(6, 8, 20, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  backdrop-filter: blur(6px);
+  pointer-events: auto;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+#room-tag:hover {
+  color: #fff;
+  background: rgba(20, 24, 46, 0.7);
+}
+
+#room-tag:focus-visible {
+  outline: 2px solid var(--blush);
+  outline-offset: 2px;
+}
+
+#toast-container {
+  position: absolute;
+  top: max(64px, calc(env(safe-area-inset-top) + 52px));
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  transform: translateX(-50%);
+}
+
+.toast {
+  padding: 9px 17px;
+  font-size: 14px;
+  white-space: nowrap;
+  color: #fff;
+  background: rgba(10, 12, 26, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  backdrop-filter: blur(8px);
+  animation: toast-in 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+
+.toast.leaving {
+  animation: toast-out 0.4s ease forwards;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-12px) scale(0.94); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes toast-out {
+  to { opacity: 0; transform: translateY(-10px); }
+}
+
+/* ------------------------------------------------------------------ *
+ * Name tags + speech bubbles.
+ * Both are positioned from projected image-space anchors, so they track
+ * the artwork exactly at any aspect ratio. Kept in separate containers
+ * so re-rendering names never destroys a bubble mid-sentence.
+ * ------------------------------------------------------------------ */
+#names-container,
+#bubbles-container {
+  position: absolute;
+  inset: 0;
+}
+
+#bubbles-container {
+  z-index: 25;
+}
+
+.floating-name {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 4px 12px 5px;
+  font-size: clamp(13px, 1.6vw, 17px);
+  font-weight: 700;
+  white-space: nowrap;
+  color: #fff;
+  border-radius: 999px;
+  background: rgba(6, 8, 20, 0.42);
+  border: 1px solid color-mix(in srgb, var(--tint, #fff) 45%, transparent);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.85);
+  box-shadow: 0 0 18px -4px color-mix(in srgb, var(--tint, #fff) 60%, transparent);
+  backdrop-filter: blur(3px);
+  will-change: transform;
+}
+
+/* The float is applied to an inner pseudo-free wrapper via translate so
+ * it composes with the JS-set transform instead of fighting it. */
+.floating-name {
+  animation: bob 3.6s ease-in-out infinite;
+}
+
+.floating-name[data-role='capybara'] {
+  animation-delay: -1.8s;
+}
+
+.floating-name.is-me::after {
+  content: ' ★';
+  color: var(--tint, #fff);
+  font-size: 0.8em;
+}
+
+.floating-name.is-waiting {
+  opacity: 0.5;
+  font-weight: 500;
+  font-size: clamp(11px, 1.3vw, 14px);
+  border-style: dashed;
+}
+
+.floating-name.pulse {
+  animation: bob 3.6s ease-in-out infinite, heartbeat 0.7s ease;
+}
+
+/* `translate` is a separate property from `transform`, so this bob does
+ * not clobber the projected position JS writes into `transform`. */
+@keyframes bob {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 0 -7px; }
+}
+
+@keyframes heartbeat {
+  0% { scale: 1; }
+  28% { scale: 1.16; }
+  55% { scale: 0.98; }
+  100% { scale: 1; }
+}
+
+.speech-bubble {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: min(230px, 62vw);
+  padding: 9px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+  text-align: center;
+  overflow-wrap: anywhere;
+  color: #22242f;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+  animation: bubble-in 0.32s cubic-bezier(0.175, 0.885, 0.32, 1.4);
+  will-change: transform;
+}
+
+.speech-bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  border: 9px solid transparent;
+  border-bottom: 0;
+  border-top-color: #fff;
+  transform: translateX(-50%);
+}
+
+.speech-bubble.leaving {
+  animation: bubble-out 0.4s ease forwards;
+}
+
+.pixel-bubble {
+  border-radius: 0;
+  font-family: var(--pixel-font);
+  border: 2px solid #14121c;
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.45);
+}
+
+.pixel-bubble::after {
+  border-width: 8px;
+  border-bottom: 0;
+  border-top-color: #14121c;
+  bottom: -10px;
+}
+
+@keyframes bubble-in {
+  from { opacity: 0; scale: 0.8; }
+  to { opacity: 1; scale: 1; }
+}
+
+@keyframes bubble-out {
+  to { opacity: 0; scale: 0.94; }
+}
+
+/* ------------------------------------------------------------------ *
+ * Chat
+ * ------------------------------------------------------------------ */
+#chat-container {
+  position: absolute;
+  left: 16px;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 30;
+  pointer-events: auto;
+}
+
+#chat-input {
+  width: 168px;
+  padding: 11px 18px;
+  font-size: 16px;
+  font-family: inherit;
+  color: #fff;
+  background: rgba(6, 8, 20, 0.5);
+  border: 1px solid var(--glass-line);
+  border-radius: 999px;
+  outline: none;
+  backdrop-filter: blur(8px);
+  transition: width 0.28s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+#chat-input::placeholder {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+#chat-input:focus {
+  width: min(280px, 62vw);
+  background: rgba(6, 8, 20, 0.72);
+  border-color: var(--rose);
+}
+
+/* ------------------------------------------------------------------ *
+ * Pixel style: swap the UI typography to match the artwork.
+ * ------------------------------------------------------------------ */
+body.is-pixel .floating-name,
+body.is-pixel .toast,
+body.is-pixel #room-tag {
+  font-family: var(--pixel-font);
+  letter-spacing: 0.02em;
+}
+
+body.is-pixel .floating-name {
+  border-radius: 3px;
+  text-shadow: 2px 2px 0 #000;
+}
+
+body.is-pixel #fireworks-canvas {
+  image-rendering: pixelated;
+}
+
+/* ------------------------------------------------------------------ *
+ * Reduced motion. Keep the fireworks (they are the point) but stop the
+ * ambient drifting, bobbing and popping.
+ * ------------------------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  .floating-name,
+  .floating-name.pulse {
+    animation: none;
+  }
+
+  .toast,
+  .speech-bubble {
+    animation-duration: 0.01ms;
+  }
+
+  .nudge {
+    animation: none;
+  }
+
+  #ground-glow {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .controls {
+    top: auto;
+    bottom: max(16px, env(safe-area-inset-bottom));
+    right: 12px;
+  }
+
+  #chat-input {
+    width: 130px;
+  }
+
+  #chat-input:focus {
+    width: min(220px, 54vw);
+  }
+
+  .ghost-btn {
+    font-size: 12px;
+    padding: 8px 12px;
+  }
+}
