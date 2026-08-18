@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>七夕專屬：線上煙火大會</title>
+    <!-- 添加 ?v=2 來強制瀏覽器更新快取 -->
+    <link rel="stylesheet" href="style.css?v=2">
+</head>
+<body>
+    <div id="login-overlay">
+        <div class="login-box">
+            <h1>✨ 星空煙火大會 ✨</h1>
+            <p>與心愛的人一起點亮夜空</p>
+            <input type="text" id="nickname-input" placeholder="輸入你的暱稱..." autocomplete="off">
+            
+            <div class="style-selector">
+                <p>選擇喜歡的風格：</p>
+                <div class="style-buttons">
+                    <button class="style-btn active" data-style="anime">動畫浪漫風</button>
+                    <button class="style-btn" data-style="pixel">可愛像素風</button>
+                </div>
+            </div>
+            
+            <button id="join-btn">進入星空</button>
+        </div>
+    </div>
+
+    <div id="main-container">
+        <!-- 透過 picture 標籤根據設備方向載入正確比例的圖片 -->
+        <picture id="bg-picture">
+            <source media="(orientation: portrait)" srcset="assets/anime_9x16.jpg" id="bg-source-portrait">
+            <img src="assets/anime_16x9.jpg" id="bg-img-landscape" alt="background">
+        </picture>
+        
+        <canvas id="fireworks-canvas"></canvas>
+        <div id="ui-layer">
+            <div class="controls">
+                <button id="toggle-style-btn">切換風格</button>
+            </div>
+            <div id="toast-container"></div>
+            <div id="names-container"></div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js?v=2"></script>
+</body>
+</html>
